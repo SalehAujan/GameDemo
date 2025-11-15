@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BNET Latency Runner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #050816;
+      color: #f9fafb;
+    }
+
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+
+    .wrapper {
+      width: 100%;
+      max-width: 480px;
+      margin: auto;
+    }
+
+    h1 {
+      font-size: 1.3rem;
+      margin: 0 0 6px;
+      text-align: center;
+    }
+
+    .subtitle {
+      font-size: 0.8rem;
+      text-align: center;
+      color: #9ca3af;
+      margin-bottom: 10px;
+    }
+
+    .latency-panel {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .latency-button {
+      flex: 1 1 46%;
+      padding: 8px 10px;
+      font-size: 0.8rem;
+      border-radius: 999px;
+      border: 1px solid #4b5563;
+      background: #111827;
+      color: #e5e7eb;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .latency-button span {
+      display: block;
+      font-size: 0.7rem;
+      color: #9ca3af;
+      margin-top: 2px;
+    }
+
+    .latency-button.active {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      border-color: transparent;
+      color: #022c22;
+      box-shadow: 0 8px 20px rgba(34, 197, 94, 0.4);
+    }
+
+    .latency-button.high.active {
+      background: linear-gradient(135deg, #f97316, #ef4444);
+      box-shadow: 0 8px 20px rgba(248, 113, 113, 0.4);
+      color: #111827;
+    }
+
+    .latency-button:active {
+      transform: scale(0.96);
+    }
+
+    .status-bar {
+      font-size: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      color: #9ca3af;
+    }
+
+    .status-bar span strong {
+      color: #f9fafb;
+    }
+
+    .status-pill {
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid #4b5563;
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    .status-pill.low {
+      border-color: #22c55e;
+    }
+
+    .status-pill.high {
+      border-color: #f97316;
+    }
+
+    canvas {
+      width: 100%;
+      height: auto;
+      border-radius: 16px;
+      background: linear-gradient(to top, #020617 0%, #0b1120 40%, #1e293b 100%);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.85);
+      touch-action: manipulation;
+    }
+
+    .instructions {
+      margin-top: 8px;
+      font-size: 0.75rem;
+      color: #9ca3af;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .instructions strong {
+      color: #e5e7eb;
+    }
+
+    .badge-row {
+      margin-top: 6px;
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      font-size: 0.7rem;
+    }
+
+    .badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid #4b5563;
+      background: rgba(15, 23, 42, 0.9);
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <h1>BNET Latency Runner</h1>
+    <div class="subtitle">
+      Tap to jump over gaps. Switch latency and feel the difference.
+    </div>
+
+    <div class="latency-panel">
+      <button class="latency-button low active" data-latency="3">
+        Low Latency: 3 ms
+        <span>Fiber-grade gaming</span>
+      </button>
+      <button class="latency-button high" data-latency="200">
+        High Latency: 200 ms
+        <span>Laggy connection</span>
+      </button>
+    </div>
+
+    <div class="status-bar">
+      <span id="latencyLabel">
+        Latency: <strong>3 ms</strong>
+      </span>
+      <span class="status-pill low" id="modeLabel">
+        Mode: Low latency demo
+      </span>
+    </div>
+
+    <canvas id="game" width="800" height="450"></canvas>
+
+    <div class="instructions">
+      <strong>How to play:</strong> Tap anywhere on the game or press <strong>Space / ↑</strong> to jump.
+      Gaps in the ground are obstacles – if you mistime your jump, you’ll fall.
+      Switch between <strong>3 ms</strong> and <strong>200 ms</strong> to show how latency affects your timing.
+      <div class="badge-row">
+        <div class="badge">Auto-run runner</div>
+        <div class="badge">Input delay = ping</div>
+        <div class="badge">Optimized for mobile</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    // --- Game constants ---
+    const GROUND_Y = 380;
+    const PLAYER_WIDTH = 40;
+    const PLAYER_HEIGHT = 40;
+    const GRAVITY = 0.7;
+    const JUMP_VELOCITY = -14;
+    const SCROLL_SPEED = 5;
+    const GAP_MIN_WIDTH = 80;
+    const GAP_MAX_WIDTH = 160;
+    const GAP_MIN_SPACING = 220;
+    const GAP_MAX_SPACING = 360;
+
+    let latencyMs = 3; // default: low latency
+    let gameState = "ready"; // "ready" | "running" | "gameover"
+
+    const player = {
+      x: 150,
+      y: GROUND_Y - PLAYER_HEIGHT,
+      width: PLAYER_WIDTH,
+      height: PLAYER_HEIGHT,
+      vy: 0,
+      onGround: true,
+      pendingJump: false
+    };
+
+    let gaps = [];
+    let score = 0;
+    let bestScore = 0;
+    let frameCount = 0;
+
+    // --- UI elements ---
+    const latencyButtons = document.querySelectorAll(".latency-button");
+    const latencyLabel = document.getElementById("latencyLabel");
+    const modeLabel = document.getElementById("modeLabel");
+
+    function setLatency(newLatency) {
+      latencyMs = newLatency;
+      latencyButtons.forEach(btn => {
+        btn.classList.toggle("active", Number(btn.dataset.latency) === latencyMs);
+      });
+
+      latencyLabel.innerHTML = `Latency: <strong>${latencyMs} ms</strong>`;
+
+      if (latencyMs <= 10) {
+        modeLabel.textContent = "Mode: Low latency demo";
+        modeLabel.classList.remove("high");
+        modeLabel.classList.add("low");
+      } else {
+        modeLabel.textContent = "Mode: High latency demo";
+        modeLabel.classList.remove("low");
+        modeLabel.classList.add("high");
+      }
+    }
+
+    latencyButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const value = Number(btn.dataset.latency);
+        setLatency(value);
+      });
+    });
+
+    // --- Game helpers ---
+    function resetGame() {
+      player.x = 150;
+      player.y = GROUND_Y - PLAYER_HEIGHT;
+      player.vy = 0;
+      player.onGround = true;
+      player.pendingJump = false;
+
+      gaps = [];
+      score = 0;
+      frameCount = 0;
+
+      // initial gaps
+      let currentX = canvas.width + 100;
+      for (let i = 0; i < 5; i++) {
+        const gapWidth = randomRange(GAP_MIN_WIDTH, GAP_MAX_WIDTH);
+        const spacing = randomRange(GAP_MIN_SPACING, GAP_MAX_SPACING);
+        gaps.push({
+          x: currentX,
+          width: gapWidth,
+          passed: false
+        });
+        currentX += gapWidth + spacing;
+      }
+    }
+
+    function startGame() {
+      resetGame();
+      gameState = "running";
+    }
+
+    function gameOver() {
+      gameState = "gameover";
+      bestScore = Math.max(bestScore, score);
+    }
+
+    function randomRange(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function handleJumpInput() {
+      if (gameState === "ready") {
+        startGame();
+      }
+      if (gameState === "gameover") {
+        startGame();
+      }
+
+      if (gameState !== "running") return;
+      if (!player.onGround || player.pendingJump) return;
+
+      player.pendingJump = true;
+
+      // Simulate latency: delay the actual jump
+      setTimeout(() => {
+        if (gameState !== "running") {
+          player.pendingJump = false;
+          return;
+        }
+        if (player.onGround) {
+          player.vy = JUMP_VELOCITY;
+          player.onGround = false;
+        }
+        player.pendingJump = false;
+      }, latencyMs);
+    }
+
+    // Input: touch / click
+    canvas.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      handleJumpInput();
+    });
+
+    // Input: keyboard
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space" || e.code === "ArrowUp") {
+        e.preventDefault();
+        handleJumpInput();
+      }
+    });
+
+    // --- Main update loop ---
+    function update() {
+      frameCount++;
+
+      if (gameState === "running") {
+        // Move gaps and handle scoring
+        for (let i = gaps.length - 1; i >= 0; i--) {
+          const gap = gaps[i];
+          gap.x -= SCROLL_SPEED;
+
+          // Score when gap fully passes the player
+          const playerCenter = player.x + player.width / 2;
+          if (!gap.passed && gap.x + gap.width < playerCenter) {
+            gap.passed = true;
+            score++;
+          }
+
+          // Remove off-screen gaps
+          if (gap.x + gap.width < -50) {
+            gaps.splice(i, 1);
+          }
+        }
+
+        // Spawn new gaps if needed
+        if (gaps.length > 0) {
+          let lastGap = gaps[gaps.length - 1];
+          if (lastGap.x + lastGap.width < canvas.width) {
+            const gapWidth = randomRange(GAP_MIN_WIDTH, GAP_MAX_WIDTH);
+            const spacing = randomRange(GAP_MIN_SPACING, GAP_MAX_SPACING);
+            gaps.push({
+              x: lastGap.x + lastGap.width + spacing,
+              width: gapWidth,
+              passed: false
+            });
+          }
+        }
+
+        // Gravity and vertical movement
+        player.vy += GRAVITY;
+        player.y += player.vy;
+
+        // Are we over a gap?
+        const isOverGap = gaps.some(gap => {
+          return player.x + player.width > gap.x && player.x < gap.x + gap.width;
+        });
+
+        // Ground collision if not over a gap
+        if (!isOverGap && player.y + player.height >= GROUND_Y) {
+          player.y = GROUND_Y - player.height;
+          player.vy = 0;
+          player.onGround = true;
+        } else {
+          // No ground under player, they are falling
+          player.onGround = false;
+        }
+
+        // Game over if player falls off screen
+        if (player.y > canvas.height + 50) {
+          gameOver();
+        }
+      }
+    }
+
+    // --- Drawing ---
+    function drawBackground() {
+      // Sky gradient already via CSS; add ground
+      ctx.fillStyle = "#020617";
+      ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+
+      // Ground line
+      ctx.strokeStyle = "#1f2937";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, GROUND_Y);
+      ctx.lineTo(canvas.width, GROUND_Y);
+      ctx.stroke();
+
+      // Subtle "data" lines (for a network feel)
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      ctx.strokeStyle = "#22c55e";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {
+        const y = 60 + i * 40 + Math.sin((frameCount + i * 20) * 0.02) * 4;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawGaps() {
+      // Draw platforms with missing pieces (gaps)
+      ctx.fillStyle = "#111827";
+      ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(0, GROUND_Y, canvas.width, 8);
+
+      // Platform segments (between gaps)
+      ctx.fillStyle = "#22c55e";
+      let segments = [];
+
+      // Build segments from gaps
+      let start = 0;
+      for (const gap of gaps) {
+        if (gap.x > start) {
+          segments.push({ x: start, width: gap.x - start });
+        }
+        start = gap.x + gap.width;
+      }
+      if (start < canvas.width) {
+        segments.push({ x: start, width: canvas.width - start });
+      }
+
+      for (const seg of segments) {
+        ctx.fillRect(seg.x, GROUND_Y - 10, seg.width, 12);
+      }
+
+      // Small glow under safe ground
+      ctx.save();
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = "#22c55e";
+      for (const seg of segments) {
+        ctx.fillRect(seg.x, GROUND_Y, seg.width, 8);
+      }
+      ctx.restore();
+    }
+
+    function drawPlayer() {
+      // Player body
+      const latencyFactor = Math.min(latencyMs / 200, 1);
+      const hueColor = latencyFactor > 0.2 ? "#f97316" : "#22c55e";
+
+      ctx.save();
+      ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+
+      // slight bob
+      const bob = Math.sin(frameCount * 0.2) * (player.onGround ? 1 : 3);
+      ctx.translate(0, bob);
+
+      // body
+      ctx.fillStyle = hueColor;
+      ctx.beginPath();
+      ctx.roundRect(-player.width / 2, -player.height / 2, player.width, player.height, 8);
+      ctx.fill();
+
+      // face
+      ctx.fillStyle = "#020617";
+      ctx.fillRect(-10, -6, 6, 4);
+      ctx.fillRect(4, -6, 6, 4);
+      ctx.fillRect(-4, 2, 8, 3);
+
+      ctx.restore();
+    }
+
+    function drawHUD() {
+      ctx.font = "16px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.fillStyle = "#f9fafb";
+      ctx.textAlign = "left";
+      ctx.fillText(`Score: ${score}`, 16, 30);
+      ctx.fillStyle = "#9ca3af";
+      ctx.fillText(`Best: ${bestScore}`, 16, 52);
+
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#9ca3af";
+      ctx.fillText(`Ping: ${latencyMs} ms`, canvas.width - 16, 30);
+
+      if (gameState === "ready") {
+        drawCenterMessage("Tap to start", "Choose a latency and feel the difference.");
+      } else if (gameState === "gameover") {
+        drawCenterMessage("You fell!", "Tap to try again – then switch latency.");
+      }
+    }
+
+    function drawCenterMessage(title, subtitle) {
+      ctx.save();
+      ctx.textAlign = "center";
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.6)";
+      ctx.lineWidth = 1.5;
+
+      const boxWidth = 340;
+      const boxHeight = 100;
+      const x = canvas.width / 2 - boxWidth / 2;
+      const y = canvas.height / 2 - boxHeight / 2;
+
+      ctx.beginPath();
+      ctx.roundRect(x, y, boxWidth, boxHeight, 12);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#f9fafb";
+      ctx.font = "18px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 10);
+
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "13px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+      ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 18);
+
+      ctx.restore();
+    }
+
+    function loop() {
+      update();
+
+      // Clear
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw
+      drawBackground();
+      drawGaps();
+      drawPlayer();
+      drawHUD();
+
+      requestAnimationFrame(loop);
+    }
+
+    // Start the loop
+    setLatency(latencyMs);
+    resetGame();
+    loop();
+  </script>
+</body>
+</html>
