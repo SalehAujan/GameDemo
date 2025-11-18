@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>BNET Platform Challenge</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bnet-blue: #00f3ff;
+            --lag-red: #ff3333;
+            --bg-color: #111;
+            --control-bg: #1a1a1a;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            font-family: 'Press Start 2P', monospace;
+            overflow: hidden;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            color: white;
+            touch-action: none;
+        }
+
+        /* --- HEADER --- */
+        header {
+            height: 60px;
+            padding: 0 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #080808;
+            border-bottom: 1px solid #333;
+            z-index: 10;
+            flex-shrink: 0;
+        }
+
+        .logo { 
+            color: var(--bnet-blue); 
+            font-size: 10px;
+        }
+
+        /* Toggle Button */
+        .net-switch {
+            background: #222;
+            border: 1px solid #555;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 9px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+        
+        .status-light {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--bnet-blue);
+        }
+
+        /* --- GAME AREA (Flex Grow) --- */
+        #game-container {
+            flex-grow: 1;
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+            background: #111;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- CONTROLS (Fixed Bottom Area) --- */
+        .controls-area {
+            height: 140px; /* Fixed height for controls */
+            background-color: var(--control-bg);
+            border-top: 2px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+            padding-bottom: env(safe-area-inset-bottom);
+            flex-shrink: 0;
+        }
+
+        .d-pad {
+            display: flex;
+            gap: 20px;
+        }
+
+        .btn {
+            width: 60px;
+            height: 60px;
+            background: #333;
+            border: 2px solid #555;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #888;
+            /* Removed blur/shadows for performance */
+        }
+        
+        .btn:active, .btn.pressed { 
+            background: #555; 
+            color: #fff;
+            transform: scale(0.95); 
+        }
+        
+        .btn-jump {
+            width: 70px; height: 70px;
+            background: #003333;
+            border-color: var(--bnet-blue);
+            color: var(--bnet-blue);
+        }
+        
+        .btn-jump:active, .btn-jump.pressed {
+            background: var(--bnet-blue);
+            color: #000;
+        }
+
+        /* --- OVERLAYS --- */
+        .overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .hidden { display: none; }
+        
+        .start-btn {
+            margin-top: 20px;
+            padding: 15px 25px;
+            background: var(--bnet-blue);
+            border: none;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 12px;
+            cursor: pointer;
+            color: #000;
+        }
+
+        /* Lag Mode Styles */
+        .lag-mode .status-light { background: var(--lag-red); }
+        .lag-mode .net-switch { border-color: var(--lag-red); color: #ffcccc; }
+        .lag-mode .btn-jump { border-color: var(--lag-red); color: var(--lag-red); background: #330000; }
+        .lag-mode .btn-jump:active { background: var(--lag-red); color: #000; }
+
+    </style>
+</head>
+<body class="bnet-mode">
+
+    <header>
+        <div class="logo">BNET ARCADE</div>
+        <div class="net-switch" onclick="toggleNetwork()">
+            <div class="status-light" id="net-light"></div>
+            <span id="net-text">BNET Latency (3 ms)</span>
+        </div>
+    </header>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <!-- Start Screen -->
+        <div id="start-screen" class="overlay">
+            <h1 style="color:var(--bnet-blue); font-size: 18px; margin-bottom: 10px;">CYBER RUN</h1>
+            <p style="color:#aaa; font-size: 10px; line-height: 1.6; max-width: 300px;">
+                Reach the GREEN portal.<br><br>
+                Switch networks to feel the lag.
+            </p>
+            <button class="start-btn" onclick="startGame()">START GAME</button>
+        </div>
+
+        <!-- Game Over / Win Screen -->
+        <div id="game-over" class="overlay hidden">
+            <h1 id="go-title" style="color:red; font-size: 18px; margin-bottom:10px;">YOU DIED</h1>
+            <p id="go-msg" style="font-size:10px; line-height: 1.6; max-width: 280px;">
+                Lag caused you to miss the jump.
+            </p>
+            <button class="start-btn" onclick="resetLevel()">TRY AGAIN</button>
+        </div>
+    </div>
+
+    <!-- Separate Controls Area (No Overlay) -->
+    <div class="controls-area">
+        <div class="d-pad">
+            <div class="btn" id="btn-left">←</div>
+            <div class="btn" id="btn-right">→</div>
+        </div>
+        <div>
+            <div class="btn btn-jump" id="btn-jump">J</div>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME SETUP ---
+        const container = document.getElementById('game-container');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false }); // Optim: No transparency needed for bg
+
+        // State
+        let isBNET = true;
+        let gameRunning = false;
+        let keys = { left: false, right: false, jump: false };
+        
+        // Level Config
+        const tileSize = 40;
+        const levelMap = [
+            "                                    ",
+            "                                    ",
+            "                                   3",
+            "                                 111",
+            "                   111          1111",
+            "                  11111   11   11111",
+            "      111        1111111111111111111",
+            "s    11111  11   1111111111111111111",
+            "111111111122112221111111111111111111", 
+        ];
+
+        let platforms = [];
+        let spikes = [];
+        let goal = null;
+
+        // Player Config
+        const player = {
+            x: 50, y: 100, width: 30, height: 30,
+            vx: 0, vy: 0, speed: 6, jumpPower: -13, // Tweaked physics for mobile feeling
+            grounded: false
+        };
+
+        let cameraX = 0;
+
+        // Resize Logic - Fits canvas to the container, not window
+        function resize() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            // Re-parse level to align floor to bottom of new height
+            if(gameRunning) parseLevel(); 
+        }
+        window.addEventListener('resize', resize);
+
+        // Level Parser
+        function parseLevel() {
+            platforms = [];
+            spikes = [];
+            // Align bottom of map to bottom of canvas
+            let startY = canvas.height - (levelMap.length * tileSize) - 20; 
+            
+            for (let row = 0; row < levelMap.length; row++) {
+                let line = levelMap[row];
+                for (let col = 0; col < line.length; col++) {
+                    let char = line[col];
+                    let x = col * tileSize;
+                    let y = startY + (row * tileSize);
+
+                    if (char === '1') platforms.push({x, y, w: tileSize, h: tileSize});
+                    if (char === '2') spikes.push({x, y: y + 20, w: tileSize, h: tileSize-20});
+                    if (char === '3') goal = {x, y, w: tileSize, h: tileSize};
+                    if (char === 's' && !gameRunning) { player.x = x; player.y = y; } 
+                }
+            }
+        }
+
+        // --- LATENCY LOGIC ---
+        function handleInput(action, isPressed) {
+            if (isBNET) {
+                keys[action] = isPressed;
+            } else {
+                setTimeout(() => {
+                    keys[action] = isPressed;
+                }, 300);
+            }
+        }
+
+        // Touch Event Handlers
+        const setupBtn = (id, action) => {
+            const btn = document.getElementById(id);
+            
+            // Visual Feedback Helper
+            const setVisual = (active) => {
+                if(active) btn.classList.add('pressed');
+                else btn.classList.remove('pressed');
+            };
+
+            // Events
+            btn.addEventListener('touchstart', (e) => { 
+                e.preventDefault(); 
+                handleInput(action, true); 
+                setVisual(true);
+            }, { passive: false });
+
+            btn.addEventListener('touchend', (e) => { 
+                e.preventDefault(); 
+                handleInput(action, false); 
+                setVisual(false);
+            }, { passive: false });
+            
+            // Mouse fallback
+            btn.addEventListener('mousedown', () => { handleInput(action, true); setVisual(true); });
+            btn.addEventListener('mouseup', () => { handleInput(action, false); setVisual(false); });
+            btn.addEventListener('mouseleave', () => { handleInput(action, false); setVisual(false); });
+        };
+
+        setupBtn('btn-left', 'left');
+        setupBtn('btn-right', 'right');
+        setupBtn('btn-jump', 'jump');
+
+        // Keyboard Support
+        window.addEventListener('keydown', (e) => {
+            if(e.code === 'ArrowLeft') handleInput('left', true);
+            if(e.code === 'ArrowRight') handleInput('right', true);
+            if(e.code === 'Space') handleInput('jump', true);
+        });
+        window.addEventListener('keyup', (e) => {
+            if(e.code === 'ArrowLeft') handleInput('left', false);
+            if(e.code === 'ArrowRight') handleInput('right', false);
+            if(e.code === 'Space') handleInput('jump', false);
+        });
+
+
+        // --- PHYSICS UPDATE ---
+        function update() {
+            // Horizontal
+            if (keys.left) player.vx = -player.speed;
+            else if (keys.right) player.vx = player.speed;
+            else player.vx *= 0.8; 
+
+            player.x += player.vx;
+
+            // Collision X
+            platforms.forEach(p => {
+                if (checkRectCollide(player, p)) {
+                    if (player.vx > 0) player.x = p.x - player.width;
+                    else if (player.vx < 0) player.x = p.x + p.w;
+                    player.vx = 0;
+                }
+            });
+
+            // Vertical
+            player.vy += 0.8; 
+            player.y += player.vy;
+            player.grounded = false;
+
+            // Collision Y
+            platforms.forEach(p => {
+                if (checkRectCollide(player, p)) {
+                    if (player.vy > 0) {
+                        player.y = p.y - player.height;
+                        player.grounded = true;
+                        player.vy = 0;
+                    } else if (player.vy < 0) {
+                        player.y = p.y + p.h;
+                        player.vy = 0;
+                    }
+                }
+            });
+
+            // Jump
+            if (keys.jump && player.grounded) {
+                player.vy = player.jumpPower;
+                player.grounded = false;
+            }
+
+            // Death
+            spikes.forEach(s => {
+                if (checkRectCollide(player, s)) die("IMPALED");
+            });
+            if (player.y > canvas.height) die("VOID");
+
+            // Win
+            if (goal && checkRectCollide(player, goal)) win();
+
+            // Camera
+            let targetCamX = player.x - (canvas.width / 3);
+            cameraX += (targetCamX - cameraX) * 0.1; 
+        }
+
+        function checkRectCollide(r1, r2) {
+            return (r1.x < r2.x + r2.w &&
+                    r1.x + r1.width > r2.x &&
+                    r1.y < r2.y + r2.h &&
+                    r1.y + r1.height > r2.y);
+        }
+
+        // --- DRAWING (Optimized: No Shadows) ---
+        function draw() {
+            // Clear
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+
+            // Platforms (Solid colors, high contrast)
+            ctx.fillStyle = isBNET ? '#222' : '#2a1a1a';
+            ctx.strokeStyle = isBNET ? '#00f3ff' : '#555';
+            ctx.lineWidth = 2;
+            
+            platforms.forEach(p => {
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+                ctx.strokeRect(p.x, p.y, p.w, p.h);
+            });
+
+            // Spikes
+            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            spikes.forEach(s => {
+                ctx.moveTo(s.x, s.y + s.h);
+                ctx.lineTo(s.x + s.w/2, s.y);
+                ctx.lineTo(s.x + s.w, s.y + s.h);
+            });
+            ctx.fill();
+
+            // Goal
+            if (goal) {
+                ctx.fillStyle = '#0f0';
+                ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+                // Minimal internal glow simulation
+                ctx.strokeStyle = '#fff';
+                ctx.strokeRect(goal.x + 5, goal.y + 5, goal.w - 10, goal.h - 10);
+            }
+
+            // Player
+            ctx.fillStyle = isBNET ? '#00f3ff' : '#ff3333';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            
+            // Eye
+            ctx.fillStyle = '#000';
+            let eyeX = (keys.right || (!keys.left && !keys.right)) ? 20 : 5;
+            ctx.fillRect(player.x + eyeX, player.y + 6, 6, 6);
+
+            ctx.restore();
+        }
+
+        function loop() {
+            if (!gameRunning) return;
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        // --- LOGIC ---
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            resize(); // Ensure size is correct before start
+            resetLevel();
+        }
+
+        function resetLevel() {
+            gameRunning = false; // Stop loop briefly
+            parseLevel();
+            player.vx = 0; player.vy = 0;
+            // Reset position explicitly
+            let startNode = levelMap.findIndex(r => r.includes('s'));
+            if(startNode > -1) {
+               // Reposition logic handled in parseLevel if not running, 
+               // but we force it here to be safe
+               player.x = 40; 
+            }
+            
+            keys = { left: false, right: false, jump: false };
+            gameRunning = true;
+            document.getElementById('game-over').classList.add('hidden');
+            loop();
+        }
+
+        function toggleNetwork() {
+            isBNET = !isBNET;
+            const light = document.getElementById('net-light');
+            const text = document.getElementById('net-text');
+            const body = document.body;
+
+            if(isBNET) {
+                text.innerText = "BNET Latency (3 ms)";
+                body.classList.remove('lag-mode');
+            } else {
+                text.innerText = "High Latency (300 ms)";
+                body.classList.add('lag-mode');
+            }
+        }
+
+        function die(reason) {
+            gameRunning = false;
+            document.getElementById('go-title').innerText = "ELIMINATED";
+            document.getElementById('go-title').style.color = "red";
+            let msg = isBNET ? "You missed the jump!" : "Lag caused input delay. You fell.";
+            document.getElementById('go-msg').innerText = msg;
+            document.getElementById('game-over').classList.remove('hidden');
+        }
+
+        function win() {
+            gameRunning = false;
+            document.getElementById('go-title').innerText = "VICTORY";
+            document.getElementById('go-title').style.color = "#0f0";
+            document.getElementById('go-msg').innerText = "Speed and latency matters.";
+            document.getElementById('game-over').classList.remove('hidden');
+        }
+        
+        // Initial call
+        resize();
+
+    </script>
+</body>
+</html>
