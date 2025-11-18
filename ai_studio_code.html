@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BNET Latency Challenge</title>
+    <style>
+        :root {
+            --bnet-color: #00f0ff;
+            --lag-color: #ff0055;
+            --bg-color: #0b0b15;
+            --card-bg: #151525;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; /* Prevent scrolling */
+            touch-action: none; /* Prevent zoom/scroll on touch */
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Header & Controls */
+        header {
+            padding: 15px;
+            background: var(--card-bg);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            z-index: 10;
+            text-align: center;
+        }
+
+        h1 { margin: 0 0 10px 0; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px; }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+        }
+
+        .stat-box span { display: block; font-weight: bold; font-size: 1.2rem; }
+
+        /* The Network Switch */
+        .switch-container {
+            display: flex;
+            background: #2a2a40;
+            border-radius: 30px;
+            position: relative;
+            cursor: pointer;
+            margin: 0 auto;
+            width: 300px;
+            height: 50px;
+            border: 2px solid #444;
+        }
+
+        .switch-option {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transition: color 0.3s;
+        }
+
+        .slider {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 50%; /* Minus padding */
+            height: 42px;
+            background: var(--lag-color);
+            border-radius: 25px;
+            transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+            box-shadow: 0 0 15px var(--lag-color);
+            z-index: 1;
+        }
+
+        /* State: BNET Active */
+        body.bnet-active .slider {
+            transform: translateX(96%);
+            background: var(--bnet-color);
+            box-shadow: 0 0 15px var(--bnet-color);
+        }
+
+        /* Game Area */
+        #game-area {
+            flex: 1;
+            position: relative;
+            cursor: crosshair;
+        }
+
+        .target {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #fff 10%, var(--bnet-color) 60%);
+            box-shadow: 0 0 20px var(--bnet-color);
+            transform: translate(-50%, -50%) scale(0);
+            animation: popIn 0.3s forwards;
+            touch-action: manipulation;
+        }
+
+        body:not(.bnet-active) .target {
+             background: radial-gradient(circle, #fff 10%, var(--lag-color) 60%);
+             box-shadow: 0 0 20px var(--lag-color);
+        }
+
+        /* Hit Feedback */
+        .ripple {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            animation: rippleEffect 0.5s linear;
+        }
+
+        /* Overlay for Start */
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            text-align: center;
+            padding: 20px;
+        }
+
+        button.start-btn {
+            background: var(--bnet-color);
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 0 20px var(--bnet-color);
+        }
+
+        @keyframes popIn { to { transform: translate(-50%, -50%) scale(1); } }
+        @keyframes rippleEffect { 
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(5); opacity: 0; }
+        }
+
+    </style>
+</head>
+<body class="bnet-active">
+
+    <header>
+        <h1>BNET Innovation Demo</h1>
+        <div class="stats">
+            <div class="stat-box">SCORE <span id="score">0</span></div>
+            <div class="stat-box">TIME <span id="timer">30s</span></div>
+            <div class="stat-box">PING <span id="ping-display">3ms</span></div>
+        </div>
+
+        <!-- Network Switch -->
+        <div class="switch-container" onclick="toggleNetwork()">
+            <div class="slider"></div>
+            <div class="switch-option">Standard (300ms)</div>
+            <div class="switch-option">BNET (3ms)</div>
+        </div>
+    </header>
+
+    <div id="game-area"></div>
+
+    <div id="overlay">
+        <h2 style="color: var(--bnet-color);">EXPERIENCE THE DIFFERENCE</h2>
+        <p>Tap the circles as fast as you can.</p>
+        <p>Switch networks mid-game to feel the lag.</p>
+        <button class="start-btn" onclick="startGame()">START GAME</button>
+    </div>
+
+    <script>
+        let score = 0;
+        let timeLeft = 30;
+        let gameInterval;
+        let spawnInterval;
+        let isPlaying = false;
+        let isBNET = true; // Default to BNET (Fast)
+
+        const gameArea = document.getElementById('game-area');
+        const scoreEl = document.getElementById('score');
+        const timerEl = document.getElementById('timer');
+        const pingEl = document.getElementById('ping-display');
+        const overlay = document.getElementById('overlay');
+        const body = document.body;
+
+        function toggleNetwork() {
+            isBNET = !isBNET;
+            if (isBNET) {
+                body.classList.add('bnet-active');
+                pingEl.innerText = "3ms";
+                pingEl.style.color = "var(--bnet-color)";
+            } else {
+                body.classList.remove('bnet-active');
+                pingEl.innerText = "300ms";
+                pingEl.style.color = "var(--lag-color)";
+            }
+        }
+
+        function startGame() {
+            score = 0;
+            timeLeft = 30;
+            scoreEl.innerText = "0";
+            timerEl.innerText = "30s";
+            overlay.style.display = "none";
+            isPlaying = true;
+            
+            // Clean previous
+            gameArea.innerHTML = '';
+
+            // Game Loop
+            gameInterval = setInterval(() => {
+                timeLeft--;
+                timerEl.innerText = timeLeft + "s";
+                if (timeLeft <= 0) endGame();
+            }, 1000);
+
+            // Spawn Loop
+            spawnInterval = setInterval(spawnTarget, 600);
+        }
+
+        function endGame() {
+            clearInterval(gameInterval);
+            clearInterval(spawnInterval);
+            isPlaying = false;
+            overlay.style.display = "flex";
+            overlay.innerHTML = `
+                <h2 style="color:white">TIME'S UP!</h2>
+                <p>Final Score: ${score}</p>
+                <p>Did you feel the lag on the Standard Network?</p>
+                <button class="start-btn" onclick="location.reload()">TRY AGAIN</button>
+            `;
+        }
+
+        function spawnTarget() {
+            if (!isPlaying) return;
+
+            const target = document.createElement('div');
+            target.classList.add('target');
+            
+            // Random Position (keeping within padding)
+            const x = Math.random() * (gameArea.clientWidth - 80) + 40;
+            const y = Math.random() * (gameArea.clientHeight - 80) + 40;
+            
+            target.style.left = `${x}px`;
+            target.style.top = `${y}px`;
+
+            // Touch/Click Event
+            // Use pointerdown for fastest response on mobile
+            target.addEventListener('pointerdown', (e) => {
+                e.preventDefault(); // prevent zoom
+                handleHit(e, target);
+            });
+
+            gameArea.appendChild(target);
+
+            // Remove target if not clicked after 1.5s
+            setTimeout(() => {
+                if (target.parentElement) target.remove();
+            }, 1500);
+        }
+
+        function handleHit(e, target) {
+            // 1. Visual Feedback of the TOUCH (Immediate)
+            createRipple(e.clientX, e.clientY);
+
+            // 2. Determine Network Latency
+            const latency = isBNET ? 3 : 300;
+
+            // 3. Process the Logic
+            setTimeout(() => {
+                if (target.parentElement) {
+                    target.remove();
+                    score++;
+                    scoreEl.innerText = score;
+                    
+                    // Audio feedback (optional, browser blocks auto audio sometimes)
+                    // playSound(); 
+                }
+            }, latency);
+        }
+
+        function createRipple(x, y) {
+            const ripple = document.createElement('div');
+            ripple.classList.add('ripple');
+            ripple.style.left = `${x}px`;
+            ripple.style.top = `${y}px`;
+            gameArea.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 500);
+        }
+    </script>
+</body>
+</html>
