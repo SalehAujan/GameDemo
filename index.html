@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BNET Platform Challenge</title>
+    <title>BNET Innovate - Game Demo</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -181,7 +181,7 @@
         
         <!-- Start Screen -->
         <div id="start-screen" class="overlay">
-            <h1 style="color:var(--bnet-blue); font-size: 18px; margin-bottom: 10px;">CYBER RUN</h1>
+            <h1 style="color:var(--bnet-blue); font-size: 18px; margin-bottom: 10px;">BNET Latency Game</h1>
             <p style="color:#aaa; font-size: 10px; line-height: 1.6; max-width: 300px;">
                 Reach the GREEN portal.<br><br>
                 Switch networks to feel the lag.
@@ -489,7 +489,7 @@
             const body = document.body;
 
             if(isBNET) {
-                text.innerText = "BNET Latency (3 ms)";
+                text.innerText = "BNET Fiber (3 ms)";
                 body.classList.remove('lag-mode');
             } else {
                 text.innerText = "High Latency (300 ms)";
